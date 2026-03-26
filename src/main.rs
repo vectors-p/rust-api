@@ -8,13 +8,13 @@ use axum::{
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::broadcast;
+use chrono::Local;
 
 #[derive(Clone)]
 struct AppState {
     tx: broadcast::Sender<String>,
 }
 
-// Query params from the URL e.g. ws://localhost:3000/ws?username=Alice
 #[derive(Deserialize)]
 struct ConnectParams {
     username: Option<String>,
@@ -34,7 +34,6 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Server running on http://localhost:3000");
-    println!("WebSocket at ws://localhost:3000/ws?username=Alice");
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -43,16 +42,19 @@ async fn ws_handler(
     Query(params): Query<ConnectParams>,
     State(state): State<Arc<AppState>>,
 ) -> Response {
-    // Use provided username or fall back to "Anonymous"
     let username = params.username.unwrap_or_else(|| "Anonymous".to_string());
     ws.on_upgrade(move |socket| handle_socket(socket, state, username))
+}
+
+
+fn timestamp() -> String {
+    Local::now().format("%H:%M:%S").to_string()
 }
 
 async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, username: String) {
     let mut rx = state.tx.subscribe();
 
-    // Announce that user joined
-    let join_msg = format!(" {username} joined the chat");
+    let join_msg = format!("[{}]  {} joined the chat", timestamp(), username);
     println!("{join_msg}");
     let _ = state.tx.send(join_msg);
 
@@ -61,14 +63,12 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, username: St
             msg = socket.recv() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        // Format message with username
-                        let formatted = format!("{username}: {text}");
+                        let formatted = format!("[{}] {}: {}", timestamp(), username, text);
                         println!("{formatted}");
                         let _ = state.tx.send(formatted);
                     }
                     Some(Ok(Message::Close(_))) | None => {
-                        // Announce that user left
-                        let leave_msg = format!(" {username} left the chat");
+                        let leave_msg = format!("[{}]  {} left the chat", timestamp(), username);
                         println!("{leave_msg}");
                         let _ = state.tx.send(leave_msg);
                         break;
