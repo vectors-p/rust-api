@@ -63,10 +63,10 @@ async fn main() {
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("────────────────────────────────────");
+    
     println!("  Server running on port 3000");
     println!("  WebSocket: ws://localhost:3000/ws?username=Alice");
-    println!("────────────────────────────────────");
+  
     axum::serve(listener, app).await.unwrap();
 }
 
